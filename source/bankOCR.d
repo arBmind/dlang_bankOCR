@@ -3,7 +3,7 @@ module bankOCR;
 //
 // User Story 1
 //
-enum int[string] numbers = [
+enum int[string] stringToDigit = [
     " _ " ~
     "| |" ~
     "|_|": 0,
@@ -51,16 +51,16 @@ auto scanNumberStrings(in string str) {
     import std.range : array, chunks, join, transposed;
     import std.string : splitLines;
 
-    return splitLines(str)
+    return splitLines(str)[0..3]
         .map!(l => chunks(l, 3))().array.transposed()
-        .map!(c => c.array[0..3].join.to!string)().array;
+        .map!(c => c.join.to!string)().array;
 }
 
 auto toNumbers(in string[] nums) {
     import std.algorithm : map;
     import std.range : array;
 
-    return nums.map!(l => numbers.get(l, -1))().array;
+    return nums.map!(l => stringToDigit.get(l, -1))().array;
 }
 
 auto scanLines(in string str) {
@@ -88,8 +88,8 @@ auto isChecksumValid(in int[] v) {
     import std.algorithm : fold, map, sum;
     import std.range : enumerate;
 
-    //return 0 == v.enumerate.map!(e => (v.length - e.index)*e.value).sum() % 11;
-    return 0 == v.enumerate.fold!((a, e) => a + (v.length - e.index)*e.value)(0uL) % 11;
+    return 0 == v.enumerate.map!(e => (v.length - e.index)*e.value).sum() % 11;
+    //return 0 == v.enumerate.fold!((a, e) => a + (v.length - e.index)*e.value)(0uL) % 11;
 }
 
 @safe unittest {
@@ -107,8 +107,8 @@ auto isLegal(in int[] v) {
 
 auto toString(in const(int[]) v) {
     import std.algorithm : map;
-    import std.conv : to;
-    return v.map!(e => e < 0 ? '?' : cast(char)('0'+e))().to!string;
+    import std.conv : to, toChars;
+    return v.map!(e => e < 0 ? '?' : e.toChars()[0])().to!string;
 }
 
 auto toOutput(in int[] v) {
@@ -126,7 +126,7 @@ auto toOutput(in int[] v) {
 //
 // User Story 4 - fix error only
 //
-enum int[][int] alternatives = [
+enum int[][int] digitAlternatives = [
     0: [8],
     1: [7],
     2: [],
@@ -139,27 +139,23 @@ enum int[][int] alternatives = [
     9: [3, 5, 8],
 ];
 
-auto validAlternatives(int[] v) {
+auto validDigitAlternatives(int[] v) {
     import std.algorithm : each;
-    import std.array : array;
     int[][] result;
 
-    void replaceDigit(ref int d) {
+    v.each!((ref d) {
         const s = d;
         scope(exit) d = s;
-        void checkAlternative(int a) {
+        digitAlternatives[d].each!((a) {
             d = a;
-            if (isChecksumValid(v)) result ~= v.array;
-        }
-        alternatives[d].each!checkAlternative();
-    }
-
-    v.each!replaceDigit();
+            if (isChecksumValid(v)) result ~= v.dup;
+        });
+    });
     return result;
 }
 
 @safe unittest {
-    assert(validAlternatives(
+    assert(validDigitAlternatives(
             [4, 9, 0, 0, 6, 7, 7, 1, 5])
         == [[4, 9, 0, 8, 6, 7, 7, 1, 5], 
             [4, 9, 0, 0, 6, 7, 1, 1, 5], 
@@ -169,7 +165,7 @@ auto validAlternatives(int[] v) {
 //
 // User Story 4 - fix illegal & error
 //
-auto horVariants(in string str) {
+auto horizontalVariants(in string str) {
     import std.algorithm : map;
     import std.range : array;
     return [1,4,7].map!((i) {
@@ -178,7 +174,7 @@ auto horVariants(in string str) {
         return dup.idup;
     }).array;
 }
-auto verVariants(in string str) {
+auto verticalVariants(in string str) {
     import std.algorithm : map;
     import std.range : array;
     return [3,5,6,8].map!((i) {
@@ -188,19 +184,18 @@ auto verVariants(in string str) {
     })().array;
 }
 
-auto buildAlternativeNumbers() {
+auto buildDigitAlternatives() {
     int[][string] result;
-    foreach (key, value; numbers) {
-        foreach (sub; horVariants(key) ~ verVariants(key)) {
-            if (sub in result) 
-                result[sub] ~= value;
+    foreach (key, value; stringToDigit) {
+        foreach (sub; horizontalVariants(key) ~ verticalVariants(key)) {
+            if (auto p = sub in result) *p ~= value;
             else result[sub] = [value];
         }
     }
     return result;
 }
 
-enum int[][string] alternativeNumbers = buildAlternativeNumbers();
+enum int[][string] stringToDigitAlternatives = buildDigitAlternatives();
 
 auto validAlternativeNumbers(int[] v, in string[] str) {
     import std.algorithm : each;
@@ -210,8 +205,8 @@ auto validAlternativeNumbers(int[] v, in string[] str) {
     foreach(i, ref d; v) {
         const bd = d;
         scope(exit) d = bd;
-        if (str[i] in alternativeNumbers)
-            foreach (a; alternativeNumbers[str[i]]) {
+        if (str[i] in stringToDigitAlternatives)
+            foreach (a; stringToDigitAlternatives[str[i]]) {
                 d = a;
                 if (isLegal(v) && isChecksumValid(v)) result ~= v.array;
             }
@@ -219,7 +214,7 @@ auto validAlternativeNumbers(int[] v, in string[] str) {
     return result;
 }
 
-auto toValidNumbers(in string str) {
+auto toValidOutputWithAlternatives(in string str) {
     import std.algorithm : map;
     import std.range : join;
     const numStrings = scanNumberStrings(str);
@@ -231,7 +226,7 @@ auto toValidNumbers(in string str) {
         return toString(orig) ~ " AMB " ~ alt.map!toString.join(", ");
     }
     if (!isChecksumValid(orig)) {
-        const alt = validAlternatives(orig.dup);
+        const alt = validDigitAlternatives(orig.dup);
         if (alt.length == 0) return toString(orig) ~ " ERR";
         if (alt.length == 1) return toString(alt[0]) ~ " FIXED " ~ toString(orig);
         return toString(orig) ~ " AMB " ~ alt.map!toString.join(", ");
@@ -240,37 +235,37 @@ auto toValidNumbers(in string str) {
 }
 
 @safe unittest {
-    assert(toValidNumbers(
+    assert(toValidOutputWithAlternatives(
         "    _  _     _  _  _  _  _ \n" ~
         "  | _| _||_| _ |_   ||_||_|\n" ~
         "  ||_  _|  | _||_|  ||_| _ ")
         == "1234?678? ILL");
 
-    assert(toValidNumbers(
+    assert(toValidOutputWithAlternatives(
         " _  _  _  _  _  _  _  _  _ \n" ~
         "|_||_||_||_||_||_||_||_||_|\n" ~
         " _| _| _| _| _| _| _| _| _|")
         == "999999999 AMB 899999999, 993999999, 999959999");
 
-    assert(toValidNumbers(
+    assert(toValidOutputWithAlternatives(
         "    _  _  _  _  _  _     _ \n" ~
         "|_||_|| || ||_   |  |  ||_ \n" ~
         "  | _||_||_||_|  |  |  | _|")
         == "490067715 AMB 490867715, 490067115, 490067719");
 
-    assert(toValidNumbers(
+    assert(toValidOutputWithAlternatives(
         "    _  _     _  _  _  _  _ \n" ~
         " _| _| _||_||_ |_   ||_||_|\n" ~
         "  ||_  _|  | _||_|  ||_| _|")
         == "123456789 FIXED ?23456789");
                 
-    assert(toValidNumbers(
+    assert(toValidOutputWithAlternatives(
         " _     _  _  _  _  _  _    \n" ~
         "| || || || || || || ||_   |\n" ~
         "|_||_||_||_||_||_||_| _|  |")
         == "000000051 FIXED 0?0000051");
                 
-    assert(toValidNumbers(
+    assert(toValidOutputWithAlternatives(
         "    _  _  _  _  _  _     _ \n" ~
         "|_||_|| ||_||_   |  |  | _ \n" ~
         "  | _||_||_||_|  |  |  | _|")

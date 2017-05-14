@@ -16,7 +16,7 @@ void main(string[] args) {
     import std.array : join;
     foreach (chunk; text.splitLines().chunks(4)) {
         import std.stdio : writeln;
-        import bankOCR : toValidNumbers;
-        writeln(chunk.join('\n').toValidNumbers());
+        import bankOCR : toValidOutputWithAlternatives;
+        writeln(chunk.join('\n').toValidOutputWithAlternatives());
     }
 }
