@@ -51,7 +51,8 @@ auto scanNumberStrings(in string str) {
     import std.range : array, chunks, join, transposed;
     import std.string : splitLines;
 
-    return splitLines(str)[0..3]
+    return str
+        .splitLines[0..3]
         .map!(l => chunks(l, 3))().array.transposed()
         .map!(c => c.join.to!string)().array;
 }
